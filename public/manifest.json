@@ -14,6 +14,7 @@
   ],
   "host_permissions": [
     "<all_urls>",
+    "https://labs.google/*",
     "https://flow.google.com/*",
     "https://flow-content.google/*",
     "https://www.meta.ai/*",
@@ -28,7 +29,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://flow.google.com/*"],
+      "matches": [
+        "https://flow.google.com/*",
+        "https://labs.google/fx/tools/flow/*",
+        "https://labs.google/*"
+      ],
       "js": ["flow_driver.js"],
       "run_at": "document_idle"
     },

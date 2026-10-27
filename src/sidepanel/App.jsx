@@ -225,17 +225,59 @@ export default function App() {
 
   // Start processing Queue
   const handleStartQueue = () => {
-    if (!apiKey) {
-      setShowSettings(true);
-      alert("กรุณากรอก DeepSeek API Key ในหน้าการตั้งค่าก่อนเริ่มรันคิวครับ");
-      return;
+    let itemsToProcess = queueItems.filter((item) => item.status !== "completed");
+
+    // If queue is empty, automatically enqueue selected product (or default product) so it starts instantly!
+    if (itemsToProcess.length === 0) {
+      let targetProduct = products.find((p) => p.id === selectedProductId) || products[0];
+      if (!targetProduct) {
+        targetProduct = {
+          id: "prod_demo_1",
+          title: "ครีมบำรุงผิวหน้า ไวท์เทนนิ่ง คอมเพล็กซ์ สูตรเข้มข้น ผิวแลดูกระจ่างใส",
+          price: "฿299.00",
+          shop: "Official Beauty Store",
+          sellerId: "seller_01",
+          cover: "https://p16-va.tiktokcdn.com/tos-maliva-i-photomode-sg/3081a28a3f5a4a5bb865882b528b0722~tplv-photomode-zoomcover:720:720.jpeg"
+        };
+      }
+
+      const mode = MARKETING_MODES.find((m) => m.id === selectedModeId) || MARKETING_MODES[0];
+      const chosenDuration = engine === "flow" ? videoDuration : "10 วินาที";
+      const isOmni = flowModel.toLowerCase().includes("omni");
+      const chosenRes = isOmni ? omniResolution : "720p";
+      const shouldUpscale = isOmni && omniResolution === "360p";
+
+      const autoItem = {
+        id: `q_${Date.now()}_auto`,
+        product: targetProduct,
+        mode,
+        clipsCount: Number(itemClipsCount) || 1,
+        completedClips: 0,
+        engine,
+        videoDuration: chosenDuration,
+        aspectRatio,
+        flowModel,
+        resolution: chosenRes,
+        shouldUpscale,
+        lockProductReference: lockProductReference !== false,
+        autoPost,
+        pinProduct,
+        enableAiDisclosure,
+        isScheduled,
+        status: "pending",
+        createdAt: Date.now()
+      };
+
+      const updated = [...queueItems, autoItem];
+      updateQueueStorage(updated);
     }
 
-    const pending = queueItems.filter((item) => item.status !== "completed");
-    if (pending.length === 0) {
-      alert("ไม่มีรายการงานที่รอทำในคิว กรุณาเลือกสินค้าแล้วกด '➕ เพิ่มลงในคิวงาน' ก่อนครับ");
-      return;
-    }
+    // Set immediate visual state in UI so user sees it working instantly
+    setQueueState({
+      running: true,
+      status: "starting",
+      message: "กำลังเริ่มต้นเชื่อมต่อ Google Flow และเริ่มสร้างวิดีโอทันที..."
+    });
 
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.sendMessage({
@@ -1006,11 +1048,12 @@ export default function App() {
         ) : (
           <button
             onClick={handleStartQueue}
-            disabled={queueItems.length === 0}
-            className="btn-primary w-full py-3 text-sm shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2"
+            className="btn-primary w-full py-3 text-sm shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] transition-transform active:scale-[0.99]"
           >
             <Play size={17} fill="currentColor" />
-            เริ่มรันคิวงานทั้งหมด ({remainingClipsInQueue} คลิปที่รอทำ)
+            {remainingClipsInQueue > 0
+              ? `เริ่มรันคิวงานทั้งหมด (${remainingClipsInQueue} คลิปที่รอทำ)`
+              : "🚀 เริ่มสร้างวิดีโอทันที (1 คลิกเริ่มทำงาน)"}
           </button>
         )}
       </section>

@@ -16,9 +16,12 @@ async function setStorage(obj) {
   return new Promise((resolve) => chrome.storage.local.set(obj, resolve));
 }
 
-// Find open tab matching a domain pattern
+// Find open tab matching a domain pattern or array of patterns
 async function findTab(urlPattern) {
   const tabs = await chrome.tabs.query({});
+  if (Array.isArray(urlPattern)) {
+    return tabs.find((t) => t.url && urlPattern.some((p) => t.url.includes(p))) || null;
+  }
   return tabs.find((t) => t.url && t.url.includes(urlPattern)) || null;
 }
 
@@ -93,12 +96,25 @@ async function fetchImageAsBase64(url) {
 // Ensure driver is injected into the target tab
 async function ensureDriverInjected(tabId, scriptFile) {
   try {
+    const isFlow = scriptFile.includes("flow");
+    const isAlive = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: isFlow ? "PING_FLOW" : "PING" }, (resp) => {
+        if (chrome.runtime.lastError || !resp?.ok) resolve(false);
+        else resolve(true);
+      });
+    });
+    if (isAlive) {
+      console.log(`[Background] Driver ${scriptFile} is already active on tab ${tabId}`);
+      return;
+    }
     await chrome.scripting.executeScript({
       target: { tabId },
       files: [scriptFile]
     });
+    console.log(`[Background] Injected ${scriptFile} into tab ${tabId}`);
+    await new Promise((r) => setTimeout(r, 1000));
   } catch (e) {
-    console.warn(`Injection note: ${e.message}`);
+    console.warn(`[Background] Injection note for ${scriptFile}: ${e.message}`);
   }
 }
 
@@ -269,7 +285,7 @@ async function processQueuePipeline(options = {}) {
             }
           });
 
-          flowTab = await ensureTab("flow.google.com", "https://flow.google.com");
+          flowTab = await ensureTab(["labs.google", "flow.google.com"], "https://flow.google.com");
           await new Promise((r) => setTimeout(r, 2500));
 
           await ensureDriverInjected(flowTab.id, "flow_driver.js");
