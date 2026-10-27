@@ -123,6 +123,20 @@ async function downloadMedia(url, filename) {
   });
 }
 
+// Automatically route any downloads originating from Google Flow or our extension into the AFFILIATE_PRO folder
+if (typeof chrome !== "undefined" && chrome.downloads?.onDeterminingFilename) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    const isFlowDownload =
+      item.url?.includes("google") ||
+      item.referrer?.includes("flow") ||
+      item.byExtensionId === chrome.runtime.id;
+    if (isFlowDownload && !item.filename.startsWith("AFFILIATE_PRO/")) {
+      const cleanName = item.filename.split(/[\/\\]/).pop();
+      suggest({ filename: `AFFILIATE_PRO/${cleanName}`, conflictAction: "uniquify" });
+    }
+  });
+}
+
 // Active queue state
 let isQueueRunning = false;
 let stopRequested = false;
