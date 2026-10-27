@@ -32,6 +32,9 @@ import { fetchShowcaseProducts } from "../lib/showcase";
 export default function App() {
   const [engine, setEngine] = useState("flow"); // "flow" | "meta"
   const [videoDuration, setVideoDuration] = useState("8 วินาที"); // "4 วินาที", "6 วินาที", "8 วินาที", "10 วินาที"
+  const [aspectRatio, setAspectRatio] = useState("9:16"); // "9:16", "16:9", "1:1", "4:3", "3:4"
+  const [flowModel, setFlowModel] = useState("Omni 1.1 Flash"); // "Omni 1.1 Flash", "Veo 3.1 - Fast", "Veo 3.1 - Quality"
+  const [omniResolution, setOmniResolution] = useState("360p"); // "360p", "720p"
   const [lockProductReference, setLockProductReference] = useState(true); // 100% Product Reference Lock
   const [selectedModeId, setSelectedModeId] = useState("warehouse_clearance");
   const [products, setProducts] = useState([]);
@@ -75,6 +78,9 @@ export default function App() {
         if (res.settings?.apiKey) setApiKey(res.settings.apiKey);
         if (res.settings?.engine) setEngine(res.settings.engine);
         if (res.settings?.videoDuration) setVideoDuration(res.settings.videoDuration);
+        if (res.settings?.aspectRatio) setAspectRatio(res.settings.aspectRatio);
+        if (res.settings?.flowModel) setFlowModel(res.settings.flowModel);
+        if (res.settings?.omniResolution) setOmniResolution(res.settings.omniResolution);
         if (res.settings?.lockProductReference !== undefined) setLockProductReference(res.settings.lockProductReference);
         if (res.settings?.autoPost !== undefined) setAutoPost(res.settings.autoPost);
         if (res.settings?.pinProduct !== undefined) setPinProduct(res.settings.pinProduct);
@@ -97,19 +103,30 @@ export default function App() {
     }
   }, []);
 
-  const saveSettings = (newKey, newDur, newLock) => {
-    const keyToSave = newKey !== undefined ? newKey : apiKey;
-    const durToSave = newDur !== undefined ? newDur : videoDuration;
-    const lockToSave = newLock !== undefined ? newLock : lockProductReference;
-    setApiKey(keyToSave);
-    if (newDur) setVideoDuration(newDur);
-    if (newLock !== undefined) setLockProductReference(newLock);
+  const saveSettings = (updates = {}) => {
+    const keyToSave = updates.apiKey !== undefined ? updates.apiKey : apiKey;
+    const durToSave = updates.videoDuration !== undefined ? updates.videoDuration : videoDuration;
+    const ratioToSave = updates.aspectRatio !== undefined ? updates.aspectRatio : aspectRatio;
+    const modelToSave = updates.flowModel !== undefined ? updates.flowModel : flowModel;
+    const resToSave = updates.omniResolution !== undefined ? updates.omniResolution : omniResolution;
+    const lockToSave = updates.lockProductReference !== undefined ? updates.lockProductReference : lockProductReference;
+
+    if (updates.apiKey !== undefined) setApiKey(updates.apiKey);
+    if (updates.videoDuration !== undefined) setVideoDuration(updates.videoDuration);
+    if (updates.aspectRatio !== undefined) setAspectRatio(updates.aspectRatio);
+    if (updates.flowModel !== undefined) setFlowModel(updates.flowModel);
+    if (updates.omniResolution !== undefined) setOmniResolution(updates.omniResolution);
+    if (updates.lockProductReference !== undefined) setLockProductReference(updates.lockProductReference);
+
     if (typeof chrome !== "undefined" && chrome.storage) {
       chrome.storage.local.set({
         settings: {
           apiKey: keyToSave,
           engine,
           videoDuration: durToSave,
+          aspectRatio: ratioToSave,
+          flowModel: modelToSave,
+          omniResolution: resToSave,
           lockProductReference: lockToSave,
           autoPost,
           pinProduct,
@@ -158,6 +175,9 @@ export default function App() {
 
     const mode = MARKETING_MODES.find((m) => m.id === selectedModeId) || MARKETING_MODES[0];
     const chosenDuration = engine === "flow" ? videoDuration : "10 วินาที";
+    const isOmni = flowModel.toLowerCase().includes("omni");
+    const chosenRes = isOmni ? omniResolution : "720p";
+    const shouldUpscale = isOmni && omniResolution === "360p";
 
     const newItem = {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -167,6 +187,10 @@ export default function App() {
       completedClips: 0,
       engine,
       videoDuration: chosenDuration,
+      aspectRatio,
+      flowModel,
+      resolution: chosenRes,
+      shouldUpscale,
       lockProductReference: lockProductReference !== false,
       autoPost,
       pinProduct,
@@ -409,7 +433,7 @@ export default function App() {
                   key={dur.id}
                   onClick={() => {
                     setVideoDuration(dur.id);
-                    saveSettings(apiKey, dur.id, lockProductReference);
+                    saveSettings({ videoDuration: dur.id });
                   }}
                   className={`py-1.5 px-2 rounded-lg text-center transition-all border ${
                     isSelected
@@ -428,6 +452,142 @@ export default function App() {
             <span className="text-xs text-slate-300">คลิป Meta AI กำหนดมาตรฐานไว้ที่:</span>
             <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
               10 วินาที (Fixed 10s)
+            </span>
+          </div>
+        )}
+      </section>
+
+      {/* Aspect Ratio Selector (อัตราส่วนภาพ: 9:16, 16:9, 1:1, 4:3, 3:4) */}
+      <section className="glass-card p-2.5 flex flex-col gap-2 rounded-xl bg-slate-900/60 border-slate-800">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <Sliders size={13} className="text-purple-400" />
+            <span>อัตราส่วนภาพ (Aspect Ratio)</span>
+          </label>
+          <span className="text-[10px] text-purple-400 font-mono">
+            {aspectRatio === "9:16" ? "9:16 (TikTok แนะนำ)" : aspectRatio}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-5 gap-1.5">
+          {[
+            { id: "9:16", label: "9:16", sub: "TikTok/Reels" },
+            { id: "16:9", label: "16:9", sub: "แนวนอน" },
+            { id: "1:1", label: "1:1", sub: "จัตุรัส" },
+            { id: "4:3", label: "4:3", sub: "คลาสสิก" },
+            { id: "3:4", label: "3:4", sub: "แนวตั้ง" }
+          ].map((ratio) => {
+            const isSelected = aspectRatio === ratio.id;
+            return (
+              <button
+                key={ratio.id}
+                onClick={() => {
+                  setAspectRatio(ratio.id);
+                  saveSettings({ aspectRatio: ratio.id });
+                }}
+                className={`py-1.5 px-1 rounded-lg text-center transition-all border ${
+                  isSelected
+                    ? "bg-purple-600 border-purple-400 text-white font-bold shadow-sm shadow-purple-500/30"
+                    : "bg-slate-800/80 border-slate-700/60 text-slate-300 hover:bg-slate-750 hover:text-white"
+                }`}
+              >
+                <div className="text-xs font-bold">{ratio.label}</div>
+                <div className="text-[8px] opacity-75 truncate">{ratio.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Model & Resolution Selection (Omni 360p ➔ 720p Upscale vs Veo 720p) */}
+      <section className="glass-card p-2.5 flex flex-col gap-2 rounded-xl bg-slate-900/60 border-slate-800">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <Sparkles size={13} className="text-emerald-400" />
+            <span>โมเดล AI และความละเอียด (Model & Resolution)</span>
+          </label>
+          <span className="text-[10px] text-emerald-400 font-mono">
+            สร้าง x1 ต่อครั้ง
+          </span>
+        </div>
+
+        {/* Model Selector Buttons */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { id: "Omni 1.1 Flash", label: "Omni 1.1 Flash", desc: "สร้างเร็ว ประหยัดเครดิต" },
+            { id: "Veo 3.1 - Fast", label: "Veo 3.1 Fast", desc: "คุณภาพสูงมาตรฐาน" },
+            { id: "Veo 3.1 - Quality", label: "Veo 3.1 Quality", desc: "คุณภาพระดับสูงสุด" }
+          ].map((m) => {
+            const isSelected = flowModel === m.id;
+            return (
+              <button
+                key={m.id}
+                onClick={() => {
+                  setFlowModel(m.id);
+                  saveSettings({ flowModel: m.id });
+                }}
+                className={`p-1.5 rounded-lg text-left transition-all border ${
+                  isSelected
+                    ? "bg-emerald-950/60 border-emerald-500 text-emerald-200 shadow-sm shadow-emerald-500/20"
+                    : "bg-slate-800/60 border-slate-700/60 text-slate-300 hover:bg-slate-750 hover:text-white"
+                }`}
+              >
+                <div className="text-[11px] font-bold leading-tight">{m.label}</div>
+                <div className="text-[9px] text-slate-400 truncate mt-0.5">{m.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Resolution Options conditional on Model */}
+        {flowModel.toLowerCase().includes("omni") ? (
+          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-[11px] text-slate-300">
+              <span className="font-semibold text-emerald-300">ความละเอียดของโมเดล Omni:</span>
+              <span className="text-[10px] text-slate-400">
+                {omniResolution === "360p" ? "อัปสเกล 720p HD ตอนดาวน์โหลด" : "โหลดตรง 720p ดั้งเดิม"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setOmniResolution("360p");
+                  saveSettings({ omniResolution: "360p" });
+                }}
+                className={`p-1.5 rounded text-left border transition-all ${
+                  omniResolution === "360p"
+                    ? "bg-emerald-900/40 border-emerald-500 text-emerald-200"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <div className="text-[11px] font-bold">360p (แนะนำ)</div>
+                <div className="text-[9px] text-slate-400">ประหยัดเครดิต + อัปสเกล 720p อัตโนมัติ</div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setOmniResolution("720p");
+                  saveSettings({ omniResolution: "720p" });
+                }}
+                className={`p-1.5 rounded text-left border transition-all ${
+                  omniResolution === "720p"
+                    ? "bg-emerald-900/40 border-emerald-500 text-emerald-200"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <div className="text-[11px] font-bold">720p ดั้งเดิม</div>
+                <div className="text-[9px] text-slate-400">ดาวน์โหลดตรง 720p ไม่ต้องอัปสเกล</div>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle size={12} className="text-emerald-400 shrink-0" />
+              <span>ความละเอียดโมเดล {flowModel}:</span>
+            </div>
+            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              720p ขนาดดั้งเดิม (ไม่ต้องอัปสเกล)
             </span>
           </div>
         )}
@@ -452,28 +612,13 @@ export default function App() {
             checked={lockProductReference}
             onChange={(e) => {
               setLockProductReference(e.target.checked);
-              saveSettings(apiKey, videoDuration, e.target.checked);
+              saveSettings({ lockProductReference: e.target.checked });
             }}
             className="accent-blue-500 w-4 h-4 ml-2 shrink-0"
           />
         </label>
       </section>
 
-      {/* Omni 360p + 720p Upscale & Single Output (x1) Specification */}
-      <section className="glass-card p-2.5 bg-gradient-to-r from-emerald-950/40 to-teal-950/30 border-emerald-700/50 flex flex-col gap-1 rounded-xl">
-        <div className="flex items-center justify-between text-xs font-bold text-emerald-200">
-          <div className="flex items-center gap-1.5">
-            <Sparkles size={14} className="text-emerald-400 shrink-0" />
-            <span>สร้าง 1 ชิ้นต่อครั้ง (x1) & 360p ➔ 720p Upscale</span>
-          </div>
-          <span className="text-[10px] bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-600/40 font-mono">
-            Omni 1.1 Flash
-          </span>
-        </div>
-        <div className="text-[10px] text-slate-300 leading-relaxed">
-          สร้างด้วย Omni 360p ทีละ 1 ชิ้น (ประหยัดเหลือ 7 เครดิต และเรนเดอร์เร็วกว่าเดิม 3 เท่า) จากนั้นระบบจะสั่งอัปสเกลความละเอียดเป็น 720p อัตโนมัติขณะดาวน์โหลดเข้าสู่ TikTok Studio
-        </div>
-      </section>
 
       {/* Marketing Style Presets (6 Modes) */}
       <section className="flex flex-col gap-1.5">
@@ -673,6 +818,18 @@ export default function App() {
                         <span className="text-[9px] px-1 py-0.2 rounded bg-blue-900/60 text-blue-300 border border-blue-700/40 font-mono">
                           {item.videoDuration || "8 วินาที"}
                         </span>
+                        {item.aspectRatio && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900/60 text-purple-300 border border-purple-700/40 font-mono">
+                            {item.aspectRatio}
+                          </span>
+                        )}
+                        {item.flowModel && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 font-mono">
+                            {item.flowModel.includes("Omni")
+                              ? `Omni (${item.resolution || "360p"}${item.shouldUpscale ? " ➔ 720p" : ""})`
+                              : item.flowModel}
+                          </span>
+                        )}
                         {item.lockProductReference !== false && (
                           <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 font-medium flex items-center gap-0.5">
                             <Lock size={8} /> ล็อกภาพ 100%

@@ -102,13 +102,13 @@ async function ensureDriverInjected(tabId, scriptFile) {
   }
 }
 
-// Download media file via chrome.downloads
+// Download media file via chrome.downloads into AFFILIATE_PRO folder
 async function downloadMedia(url, filename) {
   return new Promise((resolve, reject) => {
     chrome.downloads.download(
       {
         url,
-        filename: `TikTok-Studio-Videos/${filename}`,
+        filename: `AFFILIATE_PRO/${filename}`,
         saveAs: false,
         conflictAction: "uniquify"
       },
@@ -223,6 +223,10 @@ async function processQueuePipeline(options = {}) {
           mode: currentItem.mode,
           engine: currentItem.engine,
           videoDuration: durationChoice,
+          aspectRatio: currentItem.aspectRatio || "9:16",
+          model: currentItem.flowModel || "Omni 1.1 Flash",
+          resolution: currentItem.resolution || "360p",
+          shouldUpscale: currentItem.shouldUpscale !== false,
           lockProductReference: currentItem.lockProductReference !== false,
           productImageBase64: productMedia?.base64 || null,
           productImageMime: productMedia?.mimeType || "image/jpeg",

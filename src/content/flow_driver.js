@@ -367,8 +367,8 @@
         }
       }
 
-      // Resolution: 360p for Omni (faster generation, saves credits)
-      const targetRes = (model && model.toLowerCase().includes("omni")) ? "360p" : resolution;
+      // Resolution: 360p or 720p based on settings (Omni supports 360p / 720p, Veo defaults to 720p)
+      const targetRes = resolution || ((model && model.toLowerCase().includes("omni")) ? "360p" : "720p");
       if (targetRes) {
         const resRadio = Array.from(document.querySelectorAll('mat-radio-button, [role="radio"]')).find(r =>
           r.innerText?.includes(targetRes)
@@ -410,9 +410,9 @@
   }
 
   /**
-   * Downloads video from Google Flow upscaled to 720p
+   * Downloads video from Google Flow (Upscales to 720p if shouldUpscale is true)
    */
-  async function downloadVideoWithUpscale720p() {
+  async function downloadVideo(shouldUpscale = false) {
     try {
       const cards = Array.from(document.querySelectorAll("media-card, .card, [role='group']"));
       const videoCard = cards.find(c =>
@@ -444,18 +444,28 @@
       await simulateClick(dlItem);
       await humanDelay(600, 1000);
 
-      // In download submenu, look for 720p (e.g. '720p เพิ่มความละเอียดแล้ว' or '720p ขนาดดั้งเดิม')
+      // In download submenu, pick appropriate 720p option
       const subItems = Array.from(document.querySelectorAll('button[role="menuitem"], .mat-mdc-menu-item'));
-      const item720p = subItems.find(m => m.textContent.includes('720p'));
-      if (item720p) {
-        console.log("[FlowDriver] Triggering 720p upscaled video download:", item720p.textContent.trim());
-        await simulateClick(item720p);
+      let targetItem = null;
+      if (shouldUpscale) {
+        // Look for 720p upscaled option
+        targetItem = subItems.find(m => m.textContent.includes('720p') && m.textContent.includes('เพิ่มความละเอียด')) ||
+                     subItems.find(m => m.textContent.includes('720p'));
+      } else {
+        // Standard original 720p option
+        targetItem = subItems.find(m => m.textContent.includes('720p') && (m.textContent.includes('ดั้งเดิม') || !m.textContent.includes('เพิ่มความละเอียด'))) ||
+                     subItems.find(m => m.textContent.includes('720p'));
+      }
+
+      if (targetItem) {
+        console.log("[FlowDriver] Triggering video download:", targetItem.textContent.trim(), "shouldUpscale:", shouldUpscale);
+        await simulateClick(targetItem);
         await humanDelay(2000, 3500);
         return true;
       }
       return false;
     } catch (err) {
-      console.warn("[FlowDriver] downloadVideoWithUpscale720p notice:", err);
+      console.warn("[FlowDriver] downloadVideo notice:", err);
       return false;
     }
   }
@@ -513,13 +523,14 @@
     // STEP 1: Switch to Image Mode FIRST (โหมดรูปภาพ 9:16, x1 ภาพต่อครั้ง)
     // *Important: Switching to Image mode unlocks the '+' (เพิ่มองค์ประกอบ) button
     // =========================================================================
+    const targetRatio = job.aspectRatio || "9:16";
     sendUpdate({
       status: "running",
       stage: "configuring_image",
-      message: "สเต็ปที่ 1: ตั้งค่าโหมดรูปภาพ 9:16 (สร้างทีละ 1 ภาพ x1) ก่อนเริ่มสร้างภาพสินค้า..."
+      message: `สเต็ปที่ 1: ตั้งค่าโหมดรูปภาพ ${targetRatio} (สร้างทีละ 1 ภาพ x1) ก่อนเริ่มสร้างภาพสินค้า...`
     });
     await humanDelay(1200, 2000);
-    await configureSettings({ mode: "image", aspectRatio: "9:16", count: "x1" });
+    await configureSettings({ mode: "image", aspectRatio: targetRatio, count: "x1" });
     await humanDelay(1500, 2500);
 
     // =========================================================================
@@ -594,19 +605,24 @@
     await humanDelay(2000, 3500);
 
     // =========================================================================
-    // STEP 5: Configure Video Settings (Omni 1.1 Flash, 360p, Duration, x1)
+    // STEP 5: Configure Video Settings (Omni 1.1 Flash vs Veo, Resolution, Duration, x1)
     // =========================================================================
+    const chosenModel = job.model || "Omni 1.1 Flash";
+    const isOmni = chosenModel.toLowerCase().includes("omni");
+    const chosenRes = isOmni ? (job.resolution || "360p") : "720p";
+    const shouldUpscale = isOmni && chosenRes === "360p";
+
     sendUpdate({
       status: "running",
       stage: "configuring_video",
-      message: `สเต็ปที่ 5: ตั้งค่าวิดีโอ (โมเดล Omni, ความละเอียด 360p, ความยาว ${durationLabel}, x1 คลิป)...`
+      message: `สเต็ปที่ 5: ตั้งค่าวิดีโอ (โมเดล ${chosenModel}, ความละเอียด ${chosenRes}, ความยาว ${durationLabel}, x1 คลิป)...`
     });
     await configureSettings({
       mode: "video",
-      aspectRatio: "9:16",
+      aspectRatio: job.aspectRatio || "9:16",
       videoDuration: durationLabel,
-      model: job.model || "Omni 1.1 Flash",
-      resolution: "360p", // สร้างด้วย 360p บน Omni เพื่อความรวดเร็วและประหยัดเครดิต
+      model: chosenModel,
+      resolution: chosenRes,
       count: "x1" // สร้างเเค่ 1 คลิปต่อครั้งเท่านั้น
     });
     await humanDelay(1500, 2500);
@@ -633,16 +649,18 @@
     await humanDelay(2500, 4000);
 
     // =========================================================================
-    // STEP 7: Download Video & Upscale to 720p
+    // STEP 7: Download Video & Upscale to 720p (if Omni 360p)
     // =========================================================================
     sendUpdate({
       status: "running",
       stage: "upscaling_download",
-      message: "สเต็ปที่ 7: กำลังดาวน์โหลดและอัปสเกลวิดีโอจาก 360p เป็น 720p HD สำหรับ TikTok Studio..."
+      message: shouldUpscale
+        ? "สเต็ปที่ 7: กำลังดาวน์โหลดและอัปสเกลวิดีโอจาก 360p เป็น 720p HD..."
+        : "สเต็ปที่ 7: กำลังดาวน์โหลดวิดีโอ 720p มาตรฐาน..."
     });
     await humanDelay(1000, 2000);
-    const upscaled = await downloadVideoWithUpscale720p();
-    console.log("[FlowDriver] Upscaled to 720p download status:", upscaled);
+    const downloaded = await downloadVideo(shouldUpscale);
+    console.log("[FlowDriver] Download triggered status:", downloaded, "shouldUpscale:", shouldUpscale);
     await humanDelay(2000, 3500);
 
     const videoTile = selectors.latestVideoTile();
