@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.log
 lupefoto_b64.txt
+*.mp4
+*.mjs
+test_*.js
+eval_*.js
