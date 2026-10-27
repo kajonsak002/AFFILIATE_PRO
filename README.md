@@ -1,77 +1,81 @@
-# 🎬 AFFILIATE_PRO — TikTok AI Studio (Google Flow & Meta AI Auto Video Engine)
+# 🎬 AFFILIATE_PRO — TikTok AI Studio v2.0
+> **ระบบสร้างคลิปวิดีโอ Affiliate อัตโนมัติผ่าน Google Flow และ Meta AI พร้อมโพสต์ ปักตะกร้า และเปิดสวิตช์ AI บน TikTok Studio**
 
-ส่วนขยาย Chrome Extension (สร้างด้วย **Vite + React + Tailwind CSS**) สำหรับสร้างภาพและวิดีโอโปรโมทสินค้า TikTok Shop Showcase อัตโนมัติ โดยเชื่อมต่อกับ **Google Flow** และ **Meta AI** พร้อมระบบ AI Prompt Generator ด้วย **DeepSeek-V3 (`deepseek-chat`)** ในราคาประหยัดที่สุด และระบบนำคลิปขึ้น TikTok Studio เพื่อปักตะกร้าสินค้า
-
----
-
-## ✨ ฟีเจอร์หลัก (Key Features)
-
-1. **ดึงสินค้าจาก TikTok Shop Showcase อัตโนมัติ**:
-   - ดึงข้อมูลสินค้า (รูปปก, ชื่อสินค้า, ราคา, ชื่อร้าน) จาก API ทางการของ TikTok Showcase
-   - รองรับการเลือกสินค้าเป็นรายชิ้น หรือจัดคิวงานผลิตอัตโนมัติ
-
-2. **ระบบล็อกอัตลักษณ์สินค้า โลโก้ และฉลาก 100% (Product Reference Element)**:
-   - นำภาพปกจริงจาก Showcase เข้าระบบ Google Flow เป็น **องค์ประกอบอ้างอิง (Element Reference Chip)**
-   - สลับเข้า **โหมดรูปภาพ (Image Mode)** ก่อนเสมอ เพื่อปลดล็อกปุ่มบวก (`+`)
-   - ล็อกทรงกระปุก/ขวด โลโก้ และฉลาก 100% ก่อนสร้างภาพฉากแรก
-
-3. **การตั้งค่าอัตราส่วนภาพ (Aspect Ratio)**:
-   - รองรับทุกอัตราส่วนตาม Google Flow:
-     - `9:16` (แนวตั้ง TikTok / Reels / Shorts — แนะนำ)
-     - `16:9` (แนวนอน)
-     - `1:1` (จัตุรัส)
-     - `4:3` (คลาสสิก)
-     - `3:4` (แนวตั้ง)
-
-4. **การตั้งค่าโมเดล AI และความละเอียด (Model & Resolution)**:
-   - **Omni 1.1 Flash**:
-     - `360p`: สร้างเร็ว ประหยัดเครดิต (ใช้เพียง 6 เครดิต) + สั่ง **อัปสเกลเป็น 720p HD** อัตโนมัติขณะดาวน์โหลด
-     - `720p`: สร้างที่ความละเอียด 720p ดั้งเดิม
-   - **Veo 3.1 - Fast / Veo 3.1 - Quality**:
-     - สร้างที่ความละเอียด `720p ขนาดดั้งเดิม` (ไม่ต้องอัปสเกล)
-   - **บังคับผลลัพธ์ทีละ 1 ชิ้น (`x1`)**: ป้องกันการเรนเดอร์ซ้ำซ้อนและควบคุมเครดิต
-
-5. **การตั้งค่าความยาวคลิป (Video Duration)**:
-   - Google Flow: เลือกได้ `4 วินาที`, `6 วินาที`, `8 วินาที (แนะนำ)`, `10 วินาที`
-   - Meta AI: กำหนดมาตรฐานคงที่ไว้ที่ `10 วินาที`
-
-6. **โฟลเดอร์ดาวน์โหลดเฉพาะ (Download Destination)**:
-   - บันทึกไฟล์วิดีโอที่ดาวน์โหลดเข้าโฟลเดอร์ **`AFFILIATE_PRO`** เสมอ (ผ่าน `chrome.downloads` และตัวดักจับ `onDeterminingFilename`)
-
-7. **ระบบ TikTok Studio อัตโนมัติ (Anti-Ban 100%)**:
-   - **ปักตะกร้าสินค้าสีเหลือง**: ค้นหาและผูกตะกร้าสินค้าจาก Showcase อัตโนมัติ
-   - **บทพูดภาษาไทย 100%**: บทพากย์ภาษาไทยล้วน ไม่มีคำอังกฤษ
-   - **กรองคำต้องห้าม**: กรองคำทางการแพทย์และคำเคลมเกินจริงตามมาตรฐาน TikTok Anti-Ban
-   - **เปิดเผยเนื้อหา AI (AI Content Disclosure)**: เปิดสวิตช์ "สร้างโดย AI" บน TikTok Studio อัตโนมัติ
-   - **ตั้งเวลาโพสต์ (Post Scheduling)**: กำหนดวัน เวลา และระยะห่างของแต่ละคลิป (เช่น ทุกๆ 1, 2, 3 ชม.)
+Chrome Extension (สร้างด้วย **Vite + React + Tailwind CSS**) สำหรับครีเอเตอร์และนายหน้า TikTok Affiliate:
+- ดึงสินค้าจาก TikTok Shop Showcase ได้ด้วยการคลิกปุ่มเพียงครั้งเดียว
+- สร้างวิดีโอผ่าน **Google Flow** แบบ 2-Step Pipeline (ภาพเดี่ยว 360p &rarr; Frame to Video &rarr; Upscale 720p) หรือผ่าน **Meta AI** 10 วินาทีแนวตั้ง
+- นำคลิปเข้า **TikTok Studio** อัตโนมัติ: ปักตะกร้าเหลืองตาม Product ID, ใส่แคปชั่น, **เปิดสวิตช์เนื้อหาที่สร้างโดย AI**, และตั้งเวลาโพสต์ล่วงหน้า
 
 ---
 
-## 🚀 วิธีติดตั้งส่วนขยายเข้า Google Chrome
+## ✨ ไฮไลท์ฟังก์ชันเวอร์ชัน 2.0 (New & Enhanced)
 
-1. เปิดเบราว์เซอร์ Google Chrome ไปที่หน้า:
-   ```text
-   chrome://extensions
-   ```
-2. เปิดสวิตช์ **โหมดนักพัฒนาซอฟต์แวร์ (Developer mode)** ที่มุมขวาบน
-3. คลิกปุ่ม **โหลดส่วนขยายที่คลายการบีบอัดแล้ว (Load unpacked)**
-4. เลือกโฟลเดอร์:
-   ```text
-   C:\Users\USER\.gemini\antigravity\scratch\flow-tiktok-studio\dist
-   ```
-5. ส่วนขยาย **TikTok AI Studio** จะปรากฏขึ้นในแถบ Extensions ให้กดปักหมุด (Pin) ไว้เพื่อเปิดใช้งานเป็น Side Panel แผงด้านข้างได้ทันที!
+### 1. 🛍️ ปุ่มดึงสินค้าจาก Showcase (Fetch Showcase Button)
+- มีปุ่ม **"ดึงสินค้าจาก Showcase"** ในส่วนหัวของโปรแกรม กดคลิกเดียวจะสแกนตารางสินค้าในหน้าต่าง "เพิ่มลิงก์สินค้า" ของ TikTok Studio
+- ดึง Product ID (12–24 หลัก), ชื่อสินค้า, ราคา, สต็อก, สถานะ และรูปภาพปกความละเอียดสูง
+- มีระบบ Pagination สแกนครบทุกหน้าอัตโนมัติ
+- รองรับ Offline Demo Catalog สำรอง ทำให้เปิดใช้งานและทดสอบระบบได้ทันทีตลอด 24 ชม.
+
+### 2. ⚡ Google Flow 2-Step Sequential Pipeline
+- **Step 1 (สร้างภาพเดี่ยว):** สลับโหมดรูปภาพ &rarr; อัตราส่วน `9:16` (หรือ 16:9, 1:1) &rarr; จำนวน `x1` &rarr; Model `Omni 360p` &rarr; แนบภาพสินค้าจาก Showcase ล็อกอัตลักษณ์ 100% &rarr; ใส่ Prompt สร้างภาพ &rarr; รอเรนเดอร์เสร็จ 100%
+- **Step 2 (Frame to Video):** นำภาพที่ได้เข้าสู่โหมดเฟรม &rarr; เลือกความยาวคลิป (`4s`, `6s`, `8s`, `10s`) &rarr; Model `Omni 360p` &rarr; กรอก Motion Prompt &rarr; เริ่มสร้างวิดีโอ
+- **Step 3 (Download & Upscale):** ตรวจสอบถ้าเป็น Omni 360p จะสั่งดาวน์โหลดพร้อม **Upscale เป็น 720p HD** อัตโนมัติ! (หากเป็นโมเดลที่เป็น 720p อยู่แล้วจะดาวน์โหลดแบบปกติ)
+- บันทึกไฟล์ลงในโฟลเดอร์เครื่อง **`AFFILIATE_PRO/`**
+
+### 3. 🤖 Meta AI Dual Engine
+- ทางเลือกสลับไปใช้ **Meta AI** สำหรับการสร้างคลิปแนวตั้ง 9:16 ความยาว 10 วินาที ลิปซิงก์เสียงไทยธรรมชาติ พร้อมแนบรูปสินค้าอ้างอิง
+
+### 4. 🎯 TikTok Studio Automated Poster (100% Anti-Ban)
+- **อัปโหลดคลิป MP4** ลงในช่องอัปโหลดวิดีโอของ TikTok Studio
+- **กรอกคำอธิบาย (Caption)** พร้อมแฮชแท็กนายหน้าและ Call-to-action
+- **ปักตะกร้าสินค้าสีเหลือง (Yellow Basket):** เปิดหน้าต่างค้นหาด้วย Product ID ตรงจุด &rarr; ติ๊กเลือกสินค้า &rarr; ยืนยันผูกตะกร้า
+- **เปิดสวิตช์ "เนื้อหาที่สร้างโดย AI" (AIGC Toggle):** กด "แสดงเพิ่มเติม" (Show more) แล้วเปิดสวิตช์ AIGC อัตโนมัติ ปฏิบัติตามกฎเกณฑ์ TikTok 100%
+- **ตั้งเวลาโพสต์ (Post Scheduling):** รองรับทั้งแบบตั้งเวลาล่วงหน้า (เช่น 30 นาที) หรือโพสต์ทันที
+
+### 5. 💎 Bento Grid Modern Neon UI
+- ออกแบบใหม่ทั้งหมดด้วย Bento Grid สไตล์ Dark Neon Cyberpunk ทันสมัย สวยงาม ครบทุกปุ่มฟังก์ชัน
+- ปุ่ม **"เริ่มสร้างคลิปและโพสต์ TikTok ทันที (1-Click Start)"** เริ่มทำงานได้ทันทีโดยไม่ต้องตั้งค่าซับซ้อน
 
 ---
 
-## 🛠 คำสั่งสำหรับพัฒนา (Development)
+## 🛠️ สถาปัตยกรรมโค้ด (Codebase Structure)
 
-```bash
-# คอมไพล์โปรดักชัน
-npm run build
+```
+flow-tiktok-studio/
+├── dist/                     # ไฟล์คอมไพล์สำหรับโหลดเข้า Chrome (Load unpacked)
+│   ├── manifest.json
+│   ├── background.js
+│   ├── flow_driver.js
+│   ├── meta_driver.js
+│   ├── tiktok_driver.js
+│   └── sidepanel.html
+├── src/
+│   ├── background/           # Background Service Worker & Queue Engine
+│   │   └── index.js
+│   ├── content/              # In-page Drivers สำหรับควบคุมเว็บเป้าหมาย
+│   │   ├── flow_driver.js    # ขับเคลื่อน Google Flow (2-step image-to-video & upscale)
+│   │   ├── meta_driver.js    # ขับเคลื่อน Meta AI
+│   │   └── tiktok_driver.js  # ขับเคลื่อน TikTok Studio (Upload, Basket, AI switch, Schedule)
+│   ├── lib/
+│   │   ├── showcase.js       # ระบบดึงสินค้า Showcase + Pagination Scraper
+│   │   ├── deepseek.js       # ระบบสร้าง Prompt ภาษาไทย คัดกรองคำต้องห้าม
+│   │   ├── presets.js        # พรีเซ็ต 6 สไตล์โฆษณายอดนิยม
+│   │   └── compliance.js     # กฎเกณฑ์ Anti-Ban
+│   └── sidepanel/
+│       ├── App.jsx           # Bento Grid Modern Neon UI
+│       └── sidepanel.css
+└── public/
+    └── manifest.json         # Chrome Extension Manifest V3
 ```
 
 ---
 
-## 📦 GitHub Repository
-- **URL:** [https://github.com/kajonsak002/AFFILIATE_PRO.git](https://github.com/kajonsak002/AFFILIATE_PRO.git)
-- **Branch:** `main`
+## 🚀 วิธีติดตั้งและใช้งานใน Chrome
+
+1. เปิดเบราว์เซอร์ Google Chrome แล้วเข้าไปที่ `chrome://extensions/`
+2. เปิดสวิตช์ **Developer mode** ที่มุมขวาบน
+3. กดปุ่ม **Load unpacked** (โหลดส่วนขยายที่คลายการบีบอัดแล้ว)
+4. เลือกโฟลเดอร์:
+   `C:\Users\USER\.gemini\antigravity\scratch\flow-tiktok-studio\dist`
+5. คลิกไอคอนส่วนขยายที่แถบเครื่องมือของ Chrome เพื่อเปิด Sidepanel `AFFILIATE PRO`
+6. กดปุ่ม **"ดึงสินค้าจาก Showcase"** แล้วกด **"เริ่มสร้างคลิปและโพสต์ TikTok ทันที (1-Click Start)"**!

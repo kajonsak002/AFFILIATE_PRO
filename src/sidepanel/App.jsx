@@ -24,50 +24,44 @@ import {
   Tag,
   Sliders,
   Lock,
-  Timer
+  Timer,
+  Zap,
+  ArrowRight,
+  ExternalLink,
+  Info
 } from "lucide-react";
 import { MARKETING_MODES } from "../lib/presets";
-import { fetchShowcaseProducts } from "../lib/showcase";
+import { getShowcaseCatalog, scrapeShowcaseFromActiveTab } from "../lib/showcase";
 
 export default function App() {
   const [engine, setEngine] = useState("flow"); // "flow" | "meta"
   const [videoDuration, setVideoDuration] = useState("8 วินาที"); // "4 วินาที", "6 วินาที", "8 วินาที", "10 วินาที"
-  const [aspectRatio, setAspectRatio] = useState("9:16"); // "9:16", "16:9", "1:1", "4:3", "3:4"
-  const [flowModel, setFlowModel] = useState("Omni 1.1 Flash"); // "Omni 1.1 Flash", "Veo 3.1 - Fast", "Veo 3.1 - Quality"
+  const [aspectRatio, setAspectRatio] = useState("9:16"); // "9:16", "16:9", "1:1"
+  const [flowModel, setFlowModel] = useState("Omni 1.1 Flash"); // "Omni 1.1 Flash", "Veo 3.1 - Fast"
   const [omniResolution, setOmniResolution] = useState("360p"); // "360p", "720p"
-  const [lockProductReference, setLockProductReference] = useState(true); // 100% Product Reference Lock
+  const [lockProductReference, setLockProductReference] = useState(true);
   const [selectedModeId, setSelectedModeId] = useState("warehouse_clearance");
+
+  // Product Catalog State
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [itemClipsCount, setItemClipsCount] = useState(2); // clips for the selected item
-  const [apiKey, setApiKey] = useState("");
+  const [fetchingShowcase, setFetchingShowcase] = useState(false);
+  const [showcaseFeedback, setShowcaseFeedback] = useState("");
+
+  // Automation & TikTok Settings
   const [autoPost, setAutoPost] = useState(true);
   const [pinProduct, setPinProduct] = useState(true);
   const [enableAiDisclosure, setEnableAiDisclosure] = useState(true);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [productError, setProductError] = useState("");
+  const [postMode, setPostMode] = useState("schedule"); // "schedule" | "instant"
+  const [scheduleOffsetMinutes, setScheduleOffsetMinutes] = useState(30);
+
+  // App UI State
+  const [activeTab, setActiveTab] = useState("studio"); // "studio" | "showcase" | "queue" | "settings"
   const [showSettings, setShowSettings] = useState(false);
-  const [copiedCaptionId, setCopiedCaptionId] = useState(null);
-  const [copiedDialogueId, setCopiedDialogueId] = useState(null);
+  const [apiKey, setApiKey] = useState("");
 
-  // Queue List State
+  // Queue & Background State
   const [queueItems, setQueueItems] = useState([]);
-
-  // Scheduling State
-  const [isScheduled, setIsScheduled] = useState(true);
-  const [scheduleDate, setScheduleDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().split("T")[0]; // YYYY-MM-DD
-  });
-  const [scheduleTime, setScheduleTime] = useState(() => {
-    const now = new Date();
-    now.setHours(now.getHours() + 1);
-    now.setMinutes(0);
-    return `${String(now.getHours()).padStart(2, "0")}:00`;
-  });
-  const [intervalHours, setIntervalHours] = useState(2);
-
-  // Background queue state & history
   const [queueState, setQueueState] = useState({ running: false, status: "idle", message: "" });
   const [history, setHistory] = useState([]);
 
@@ -85,7 +79,7 @@ export default function App() {
         if (res.settings?.autoPost !== undefined) setAutoPost(res.settings.autoPost);
         if (res.settings?.pinProduct !== undefined) setPinProduct(res.settings.pinProduct);
         if (res.settings?.enableAiDisclosure !== undefined) setEnableAiDisclosure(res.settings.enableAiDisclosure);
-        if (res.settings?.intervalHours) setIntervalHours(res.settings.intervalHours);
+        if (res.settings?.postMode) setPostMode(res.settings.postMode);
         if (res.queueItems) setQueueItems(res.queueItems);
         if (res.queueState) setQueueState(res.queueState);
         if (res.history) setHistory(res.history);
@@ -103,73 +97,72 @@ export default function App() {
     }
   }, []);
 
+  // Initial load of Showcase Catalog
+  useEffect(() => {
+    (async () => {
+      const catalog = await getShowcaseCatalog();
+      setProducts(catalog);
+      if (catalog.length > 0 && !selectedProductId) {
+        setSelectedProductId(catalog[0].productId || catalog[0].id);
+      }
+    })();
+  }, []);
+
+  // Save settings helper
   const saveSettings = (updates = {}) => {
-    const keyToSave = updates.apiKey !== undefined ? updates.apiKey : apiKey;
-    const durToSave = updates.videoDuration !== undefined ? updates.videoDuration : videoDuration;
-    const ratioToSave = updates.aspectRatio !== undefined ? updates.aspectRatio : aspectRatio;
-    const modelToSave = updates.flowModel !== undefined ? updates.flowModel : flowModel;
-    const resToSave = updates.omniResolution !== undefined ? updates.omniResolution : omniResolution;
-    const lockToSave = updates.lockProductReference !== undefined ? updates.lockProductReference : lockProductReference;
-
-    if (updates.apiKey !== undefined) setApiKey(updates.apiKey);
-    if (updates.videoDuration !== undefined) setVideoDuration(updates.videoDuration);
-    if (updates.aspectRatio !== undefined) setAspectRatio(updates.aspectRatio);
-    if (updates.flowModel !== undefined) setFlowModel(updates.flowModel);
-    if (updates.omniResolution !== undefined) setOmniResolution(updates.omniResolution);
-    if (updates.lockProductReference !== undefined) setLockProductReference(updates.lockProductReference);
-
     if (typeof chrome !== "undefined" && chrome.storage) {
       chrome.storage.local.set({
         settings: {
-          apiKey: keyToSave,
+          apiKey,
           engine,
-          videoDuration: durToSave,
-          aspectRatio: ratioToSave,
-          flowModel: modelToSave,
-          omniResolution: resToSave,
-          lockProductReference: lockToSave,
+          videoDuration,
+          aspectRatio,
+          flowModel,
+          omniResolution,
+          lockProductReference,
           autoPost,
           pinProduct,
           enableAiDisclosure,
-          intervalHours
+          postMode,
+          scheduleOffsetMinutes,
+          ...updates
         }
       });
     }
   };
 
-  const updateQueueStorage = (newItems) => {
-    setQueueItems(newItems);
-    if (typeof chrome !== "undefined" && chrome.storage) {
-      chrome.storage.local.set({ queueItems: newItems });
-    }
-  };
-
-  // Load showcase products
-  const handleLoadProducts = async () => {
-    setLoadingProducts(true);
-    setProductError("");
+  // Direct Showcase Fetch Button Handler
+  const handleFetchShowcase = async () => {
+    setFetchingShowcase(true);
+    setShowcaseFeedback("กำลังเชื่อมต่อและดึงรายการสินค้าจาก TikTok Studio...");
     try {
-      const items = await fetchShowcaseProducts(30);
-      setProducts(items);
-      if (items.length > 0 && !selectedProductId) {
-        setSelectedProductId(items[0].id);
+      const res = await scrapeShowcaseFromActiveTab();
+      if (res.products && res.products.length > 0) {
+        setProducts(res.products);
+        if (!selectedProductId || !res.products.some((p) => (p.productId || p.id) === selectedProductId)) {
+          setSelectedProductId(res.products[0].productId || res.products[0].id);
+        }
+        setShowcaseFeedback(
+          res.source === "tiktok_tab"
+            ? `ดึงสินค้าจากหน้าจอ TikTok Studio สำเร็จ ${res.count} รายการ!`
+            : `โหลดคลังสินค้าพร้อมใช้งานแล้ว ${res.count} รายการ (${res.note || "พร้อมทำงานทันที"})`
+        );
+      } else {
+        setShowcaseFeedback("ไม่พบข้อมูลสินค้า กำลังใช้คลังสินค้าตัวอย่าง");
       }
     } catch (err) {
-      setProductError(err.message || "ไม่สามารถดึงข้อมูล Showcase ได้");
+      setShowcaseFeedback(`ข้อความ: ${err.message}`);
     } finally {
-      setLoadingProducts(false);
+      setFetchingShowcase(false);
+      setTimeout(() => setShowcaseFeedback(""), 5000);
     }
   };
 
-  useEffect(() => {
-    handleLoadProducts();
-  }, []);
-
-  // Add Item to Queue
-  const handleAddToQueue = () => {
-    const product = products.find((p) => p.id === selectedProductId);
-    if (!product) {
-      alert("กรุณาเลือกสินค้าจากรายการด้านล่างก่อนเพิ่มลงคิวครับ");
+  // 1-Click Instant Automation Handler
+  const handleStartAutomation = () => {
+    let targetProduct = products.find((p) => (p.productId || p.id) === selectedProductId) || products[0];
+    if (!targetProduct) {
+      alert("กรุณาเลือกหรือดึงสินค้าก่อนเริ่มงานครับ");
       return;
     }
 
@@ -179,11 +172,21 @@ export default function App() {
     const chosenRes = isOmni ? omniResolution : "720p";
     const shouldUpscale = isOmni && omniResolution === "360p";
 
-    const newItem = {
+    const jobItem = {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      product,
+      product: {
+        id: targetProduct.productId || targetProduct.id,
+        productId: targetProduct.productId || targetProduct.id,
+        title: targetProduct.name || targetProduct.title,
+        name: targetProduct.name || targetProduct.title,
+        price: targetProduct.price,
+        stock: targetProduct.stock,
+        cover: targetProduct.image || targetProduct.cover,
+        image: targetProduct.image || targetProduct.cover,
+        shop: targetProduct.shop || "ร้านค้าของคุณ"
+      },
       mode,
-      clipsCount: Number(itemClipsCount) || 1,
+      clipsCount: 1,
       completedClips: 0,
       engine,
       videoDuration: chosenDuration,
@@ -191,102 +194,25 @@ export default function App() {
       flowModel,
       resolution: chosenRes,
       shouldUpscale,
-      lockProductReference: lockProductReference !== false,
+      lockProductReference,
       autoPost,
       pinProduct,
       enableAiDisclosure,
-      isScheduled,
+      postMode,
+      scheduleOffsetMinutes,
       status: "pending",
       createdAt: Date.now()
     };
 
-    const updated = [...queueItems, newItem];
-    updateQueueStorage(updated);
-  };
-
-  // Remove Item from Queue
-  const handleRemoveQueueItem = (id) => {
-    const updated = queueItems.filter((item) => item.id !== id);
-    updateQueueStorage(updated);
-  };
-
-  // Clear All Queue
-  const handleClearQueue = () => {
-    if (window.confirm("ต้องการล้างคิวงานทั้งหมดหรือไม่?")) {
-      updateQueueStorage([]);
-    }
-  };
-
-  // Total clips in queue
-  const totalClipsInQueue = queueItems.reduce((sum, item) => sum + (item.clipsCount || 0), 0);
-  const remainingClipsInQueue = queueItems
-    .filter((item) => item.status !== "completed")
-    .reduce((sum, item) => sum + ((item.clipsCount || 0) - (item.completedClips || 0)), 0);
-
-  // Start processing Queue
-  const handleStartQueue = () => {
-    let itemsToProcess = queueItems.filter((item) => item.status !== "completed");
-
-    // If queue is empty, automatically enqueue selected product (or default product) so it starts instantly!
-    if (itemsToProcess.length === 0) {
-      let targetProduct = products.find((p) => p.id === selectedProductId) || products[0];
-      if (!targetProduct) {
-        targetProduct = {
-          id: "prod_demo_1",
-          title: "ครีมบำรุงผิวหน้า ไวท์เทนนิ่ง คอมเพล็กซ์ สูตรเข้มข้น ผิวแลดูกระจ่างใส",
-          price: "฿299.00",
-          shop: "Official Beauty Store",
-          sellerId: "seller_01",
-          cover: "https://p16-va.tiktokcdn.com/tos-maliva-i-photomode-sg/3081a28a3f5a4a5bb865882b528b0722~tplv-photomode-zoomcover:720:720.jpeg"
-        };
-      }
-
-      const mode = MARKETING_MODES.find((m) => m.id === selectedModeId) || MARKETING_MODES[0];
-      const chosenDuration = engine === "flow" ? videoDuration : "10 วินาที";
-      const isOmni = flowModel.toLowerCase().includes("omni");
-      const chosenRes = isOmni ? omniResolution : "720p";
-      const shouldUpscale = isOmni && omniResolution === "360p";
-
-      const autoItem = {
-        id: `q_${Date.now()}_auto`,
-        product: targetProduct,
-        mode,
-        clipsCount: Number(itemClipsCount) || 1,
-        completedClips: 0,
-        engine,
-        videoDuration: chosenDuration,
-        aspectRatio,
-        flowModel,
-        resolution: chosenRes,
-        shouldUpscale,
-        lockProductReference: lockProductReference !== false,
-        autoPost,
-        pinProduct,
-        enableAiDisclosure,
-        isScheduled,
-        status: "pending",
-        createdAt: Date.now()
-      };
-
-      const updated = [...queueItems, autoItem];
-      updateQueueStorage(updated);
-    }
-
-    // Set immediate visual state in UI so user sees it working instantly
-    setQueueState({
-      running: true,
-      status: "starting",
-      message: "กำลังเริ่มต้นเชื่อมต่อ Google Flow และเริ่มสร้างวิดีโอทันที..."
-    });
-
-    if (typeof chrome !== "undefined" && chrome.runtime) {
+    const newQueue = [jobItem, ...queueItems];
+    setQueueItems(newQueue);
+    if (typeof chrome !== "undefined" && chrome.storage) {
+      chrome.storage.local.set({ queueItems: newQueue });
       chrome.runtime.sendMessage({
         action: "START_QUEUE",
         options: {
-          apiKey,
-          scheduleDate,
-          scheduleTime,
-          intervalHours: Number(intervalHours)
+          apiKey: apiKey.trim(),
+          scheduleOffsetMinutes
         }
       });
     }
@@ -298,870 +224,405 @@ export default function App() {
     }
   };
 
-  const handleCopyCaption = (id, text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCaptionId(id);
-    setTimeout(() => setCopiedCaptionId(null), 2000);
-  };
-
-  const handleCopyDialogue = (id, text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedDialogueId(id);
-    setTimeout(() => setCopiedDialogueId(null), 2000);
-  };
+  const currentProduct = products.find((p) => (p.productId || p.id) === selectedProductId) || products[0];
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 p-3.5 pb-16 flex flex-col gap-3.5">
-      {/* Header */}
-      <header className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#fe2c55] to-[#25f4ee] flex items-center justify-center font-black text-white text-base shadow-lg shadow-pink-500/20">
-            T
+    <div className="flex flex-col h-screen bg-[#0a0d14] text-slate-100 font-sans select-none antialiased overflow-hidden">
+      {/* Top Bento Header */}
+      <header className="px-4 py-3 bg-[#0f1422]/90 backdrop-blur-md border-b border-cyan-500/20 flex items-center justify-between shrink-0 shadow-lg shadow-black/40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-500 flex items-center justify-center shadow-md shadow-cyan-500/25 ring-1 ring-cyan-400/40">
+            <Zap className="w-4 h-4 text-white fill-white" />
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
-              TikTok AI Studio
-              <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-full font-mono">
-                PRO
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-sm tracking-wide bg-gradient-to-r from-white via-cyan-100 to-cyan-400 bg-clip-text text-transparent">
+                AFFILIATE PRO
               </span>
-            </h1>
-            <p className="text-[10px] text-slate-400">Google Flow & Meta AI Auto Video Engine</p>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                v2.0
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400">Flow & Meta AI Auto Video to TikTok Studio</p>
           </div>
         </div>
 
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            showSettings
-              ? "bg-slate-800 border-slate-600 text-white"
-              : "border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
-          }`}
-          title="ตั้งค่า API & Engine"
-        >
-          <Settings size={16} />
-        </button>
+        {/* Header Action Pills */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleFetchShowcase}
+            disabled={fetchingShowcase}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-900/40 transition-all active:scale-95 disabled:opacity-50"
+            title="ดึงสินค้าจากตาราง Showcase ในหน้าจอ TikTok Studio"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${fetchingShowcase ? "animate-spin" : ""}`} />
+            <span>ดึงสินค้าจาก Showcase</span>
+          </button>
+        </div>
       </header>
 
-      {/* Settings Panel Modal / Dropdown */}
-      {showSettings && (
-        <section className="glass-card p-3 flex flex-col gap-2.5 border-amber-500/40 bg-slate-900/90 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <Settings size={13} /> ตั้งค่าระบบ & API Key
+      {/* Showcase Feedback Toast */}
+      {showcaseFeedback && (
+        <div className="mx-3 mt-2 px-3 py-2 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-xs text-cyan-200 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+          <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="flex-1">{showcaseFeedback}</span>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3.5 custom-scrollbar">
+        {/* Active Product Showcase Card (Bento Row 1) */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#141b2d] to-[#0f1422] border border-cyan-500/20 shadow-md">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-bold text-slate-200">สินค้าใน Showcase สำหรับทำคลิป</span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {products.length} รายการ
             </span>
+          </div>
+
+          {currentProduct ? (
+            <div className="flex gap-3 bg-black/30 p-2.5 rounded-xl border border-white/5 items-center">
+              <img
+                src={currentProduct.image || currentProduct.cover}
+                alt={currentProduct.name || currentProduct.title}
+                className="w-16 h-16 rounded-lg object-cover ring-1 ring-cyan-500/30 shrink-0 bg-slate-800"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-xs font-bold text-white truncate">
+                    {currentProduct.name || currentProduct.title}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="font-extrabold text-cyan-400 font-mono">
+                    {currentProduct.price}
+                  </span>
+                  {currentProduct.stock && (
+                    <span className="text-slate-400">
+                      สต็อก: {Number(currentProduct.stock).toLocaleString()}
+                    </span>
+                  )}
+                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {currentProduct.status || "ดำเนินอยู่"}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-1 flex items-center gap-1">
+                  <span className="text-slate-500">ID:</span>
+                  <span>{currentProduct.productId || currentProduct.id}</span>
+                </div>
+              </div>
+
+              {/* Product Lock Badge */}
+              <button
+                onClick={() => {
+                  const nextLock = !lockProductReference;
+                  setLockProductReference(nextLock);
+                  saveSettings({ lockProductReference: nextLock });
+                }}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg border text-[10px] font-medium transition-all ${
+                  lockProductReference
+                    ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-300"
+                    : "bg-slate-800/40 border-slate-700 text-slate-500"
+                }`}
+                title="ล็อกภาพสินค้าและโลโก้ 100% ไม่ให้ AI เพี้ยน"
+              >
+                <Lock className={`w-3.5 h-3.5 mb-0.5 ${lockProductReference ? "text-cyan-400" : ""}`} />
+                <span>{lockProductReference ? "ล็อกภาพ" : "ปลดล็อก"}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-xs text-slate-400">
+              ยังไม่มีสินค้า คลิก "ดึงสินค้าจาก Showcase" ด้านบนเพื่อโหลดสินค้า
+            </div>
+          )}
+
+          {/* Product Dropdown Selector */}
+          {products.length > 1 && (
+            <div className="mt-2.5">
+              <select
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-black/40 border border-white/10 text-slate-200 focus:outline-none focus:border-cyan-500"
+              >
+                {products.map((p) => (
+                  <option key={p.productId || p.id} value={p.productId || p.id}>
+                    {p.name || p.title} ({p.price})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Engine & Video Studio Settings (Bento Row 2) */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#141b2d] to-[#0f1422] border border-cyan-500/20 shadow-md space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Video className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-bold text-slate-200">สตูดิโอสร้างคลิป (Dual AI Engine)</span>
+            </div>
+            <span className="text-[10px] text-cyan-400 font-medium">
+              {engine === "flow" ? "Google Flow 2-Step" : "Meta AI 9:16"}
+            </span>
+          </div>
+
+          {/* Engine Selector */}
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setShowSettings(false)}
-              className="text-xs text-slate-400 hover:text-white"
+              onClick={() => {
+                setEngine("flow");
+                saveSettings({ engine: "flow" });
+              }}
+              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                engine === "flow"
+                  ? "bg-cyan-500/20 border-cyan-500 text-white shadow-md shadow-cyan-950"
+                  : "bg-black/30 border-white/5 text-slate-400 hover:text-slate-200"
+              }`}
             >
-              ✕
+              <span>Google Flow</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-400/20 text-cyan-300">
+                สเต็ป 1 ภาพ + วิดีโอ
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setEngine("meta");
+                saveSettings({ engine: "meta" });
+              }}
+              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                engine === "meta"
+                  ? "bg-indigo-500/20 border-indigo-500 text-white shadow-md shadow-indigo-950"
+                  : "bg-black/30 border-white/5 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span>Meta AI</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-400/20 text-indigo-300">
+                10s แนวตั้ง
+              </span>
             </button>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-              <span>DeepSeek API Key (ถูกที่สุด $0.14/1M)</span>
-              {apiKey ? (
-                <span className="text-emerald-400 text-[10px] flex items-center gap-0.5">
-                  <CheckCircle size={10} /> บันทึกแล้ว
-                </span>
-              ) : (
-                <span className="text-red-400 text-[10px]">จำเป็นต้องกรอก</span>
-              )}
+          {/* Duration Selector (4s, 6s, 8s, 10s) */}
+          <div>
+            <label className="text-[11px] text-slate-400 block mb-1.5">
+              ความยาววิดีโอ (เลือก 4, 6, 8 หรือ 10 วินาที):
             </label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={apiKey}
-              onChange={(e) => saveSettings(e.target.value)}
-              className="text-xs bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
-            />
-            <p className="text-[9px] text-slate-400">
-              ใช้โมเดล <code className="text-blue-400">deepseek-chat</code> ประหยัดต้นทุนที่สุด ร่างสคริปต์ภาษาไทย 100% พร้อมตรวจคำต้องห้าม
-            </p>
-          </div>
-        </section>
-      )}
-
-      {/* Compliance & Anti-Ban Security Badge */}
-      <section className="glass-card p-2.5 bg-gradient-to-r from-emerald-950/40 to-teal-950/30 border-emerald-700/50 flex flex-col gap-1.5 rounded-xl">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-emerald-400" />
-            TikTok Anti-Ban Compliance (100%)
-          </span>
-          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded-full font-mono">
-            AZ Rules Active
-          </span>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 text-[9px] text-slate-300">
-          <div className="flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-            <Mic size={11} className="text-blue-400 shrink-0" />
-            <span>บทพูดไทย 100% (ไม่มีอังกฤษ)</span>
-          </div>
-          <div className="flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-            <ShieldCheck size={11} className="text-amber-400 shrink-0" />
-            <span>กรองคำแพทย์/เคลมแรง</span>
-          </div>
-          <div className="flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-            <Tag size={11} className="text-pink-400 shrink-0" />
-            <span>ปักตะกร้า & แฮชแท็กออโต้</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Engine Selector */}
-      <section className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold text-slate-300">เลือกเครื่องมือสร้างวิดีโอ (Engine)</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setEngine("flow")}
-            className={`p-2 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
-              engine === "flow"
-                ? "bg-slate-800 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            <div className={`p-1.5 rounded-lg ${engine === "flow" ? "bg-blue-600 text-white" : "bg-slate-800"}`}>
-              <Sparkles size={15} />
-            </div>
-            <div>
-              <div className="text-xs font-bold">Google Flow</div>
-              <div className="text-[10px] opacity-75">Veo 3.1 Fast</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setEngine("meta")}
-            className={`p-2 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
-              engine === "meta"
-                ? "bg-slate-800 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            <div className={`p-1.5 rounded-lg ${engine === "meta" ? "bg-blue-600 text-white" : "bg-slate-800"}`}>
-              <Layers size={15} />
-            </div>
-            <div>
-              <div className="text-xs font-bold">Meta AI</div>
-              <div className="text-[10px] opacity-75">Video Animate</div>
-            </div>
-          </button>
-        </div>
-      </section>
-
-      {/* Video Duration Selector */}
-      <section className="glass-card p-2.5 flex flex-col gap-2 rounded-xl bg-slate-900/60 border-slate-800">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-            <Timer size={13} className="text-blue-400" />
-            <span>ความยาวคลิป (Video Duration)</span>
-          </label>
-          <span className="text-[10px] text-blue-400 font-mono">
-            {engine === "flow" ? `Google Flow (${videoDuration})` : "Meta AI (10 วินาทีคงที่)"}
-          </span>
-        </div>
-
-        {engine === "flow" ? (
-          <div className="grid grid-cols-4 gap-1.5">
-            {[
-              { id: "4 วินาที", label: "4 วินาที", sub: "4s" },
-              { id: "6 วินาที", label: "6 วินาที", sub: "6s" },
-              { id: "8 วินาที", label: "8 วินาที", sub: "8s (แนะนำ)" },
-              { id: "10 วินาที", label: "10 วินาที", sub: "10s" }
-            ].map((dur) => {
-              const isSelected = videoDuration === dur.id;
-              return (
+            <div className="grid grid-cols-4 gap-1.5">
+              {["4 วินาที", "6 วินาที", "8 วินาที", "10 วินาที"].map((dur) => (
                 <button
-                  key={dur.id}
+                  key={dur}
                   onClick={() => {
-                    setVideoDuration(dur.id);
-                    saveSettings({ videoDuration: dur.id });
+                    setVideoDuration(dur);
+                    saveSettings({ videoDuration: dur });
                   }}
-                  className={`py-1.5 px-2 rounded-lg text-center transition-all border ${
-                    isSelected
-                      ? "bg-blue-600 border-blue-400 text-white font-bold shadow-sm shadow-blue-500/30"
-                      : "bg-slate-800/80 border-slate-700/60 text-slate-300 hover:bg-slate-750 hover:text-white"
+                  className={`py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    videoDuration === dur
+                      ? "bg-cyan-500/25 border-cyan-400 text-white"
+                      : "bg-black/20 border-white/5 text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  <div className="text-xs font-bold">{dur.label}</div>
-                  <div className="text-[9px] opacity-75">{dur.sub}</div>
+                  {dur.replace(" วินาที", "s")}
                 </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-300">คลิป Meta AI กำหนดมาตรฐานไว้ที่:</span>
-            <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-              10 วินาที (Fixed 10s)
-            </span>
-          </div>
-        )}
-      </section>
-
-      {/* Aspect Ratio Selector (อัตราส่วนภาพ: 9:16, 16:9, 1:1, 4:3, 3:4) */}
-      <section className="glass-card p-2.5 flex flex-col gap-2 rounded-xl bg-slate-900/60 border-slate-800">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-            <Sliders size={13} className="text-purple-400" />
-            <span>อัตราส่วนภาพ (Aspect Ratio)</span>
-          </label>
-          <span className="text-[10px] text-purple-400 font-mono">
-            {aspectRatio === "9:16" ? "9:16 (TikTok แนะนำ)" : aspectRatio}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-5 gap-1.5">
-          {[
-            { id: "9:16", label: "9:16", sub: "TikTok/Reels" },
-            { id: "16:9", label: "16:9", sub: "แนวนอน" },
-            { id: "1:1", label: "1:1", sub: "จัตุรัส" },
-            { id: "4:3", label: "4:3", sub: "คลาสสิก" },
-            { id: "3:4", label: "3:4", sub: "แนวตั้ง" }
-          ].map((ratio) => {
-            const isSelected = aspectRatio === ratio.id;
-            return (
-              <button
-                key={ratio.id}
-                onClick={() => {
-                  setAspectRatio(ratio.id);
-                  saveSettings({ aspectRatio: ratio.id });
-                }}
-                className={`py-1.5 px-1 rounded-lg text-center transition-all border ${
-                  isSelected
-                    ? "bg-purple-600 border-purple-400 text-white font-bold shadow-sm shadow-purple-500/30"
-                    : "bg-slate-800/80 border-slate-700/60 text-slate-300 hover:bg-slate-750 hover:text-white"
-                }`}
-              >
-                <div className="text-xs font-bold">{ratio.label}</div>
-                <div className="text-[8px] opacity-75 truncate">{ratio.sub}</div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Model & Resolution Selection (Omni 360p ➔ 720p Upscale vs Veo 720p) */}
-      <section className="glass-card p-2.5 flex flex-col gap-2 rounded-xl bg-slate-900/60 border-slate-800">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-            <Sparkles size={13} className="text-emerald-400" />
-            <span>โมเดล AI และความละเอียด (Model & Resolution)</span>
-          </label>
-          <span className="text-[10px] text-emerald-400 font-mono">
-            สร้าง x1 ต่อครั้ง
-          </span>
-        </div>
-
-        {/* Model Selector Buttons */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {[
-            { id: "Omni 1.1 Flash", label: "Omni 1.1 Flash", desc: "สร้างเร็ว ประหยัดเครดิต" },
-            { id: "Veo 3.1 - Fast", label: "Veo 3.1 Fast", desc: "คุณภาพสูงมาตรฐาน" },
-            { id: "Veo 3.1 - Quality", label: "Veo 3.1 Quality", desc: "คุณภาพระดับสูงสุด" }
-          ].map((m) => {
-            const isSelected = flowModel === m.id;
-            return (
-              <button
-                key={m.id}
-                onClick={() => {
-                  setFlowModel(m.id);
-                  saveSettings({ flowModel: m.id });
-                }}
-                className={`p-1.5 rounded-lg text-left transition-all border ${
-                  isSelected
-                    ? "bg-emerald-950/60 border-emerald-500 text-emerald-200 shadow-sm shadow-emerald-500/20"
-                    : "bg-slate-800/60 border-slate-700/60 text-slate-300 hover:bg-slate-750 hover:text-white"
-                }`}
-              >
-                <div className="text-[11px] font-bold leading-tight">{m.label}</div>
-                <div className="text-[9px] text-slate-400 truncate mt-0.5">{m.desc}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Resolution Options conditional on Model */}
-        {flowModel.toLowerCase().includes("omni") ? (
-          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] text-slate-300">
-              <span className="font-semibold text-emerald-300">ความละเอียดของโมเดล Omni:</span>
-              <span className="text-[10px] text-slate-400">
-                {omniResolution === "360p" ? "อัปสเกล 720p HD ตอนดาวน์โหลด" : "โหลดตรง 720p ดั้งเดิม"}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  setOmniResolution("360p");
-                  saveSettings({ omniResolution: "360p" });
-                }}
-                className={`p-1.5 rounded text-left border transition-all ${
-                  omniResolution === "360p"
-                    ? "bg-emerald-900/40 border-emerald-500 text-emerald-200"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <div className="text-[11px] font-bold">360p (แนะนำ)</div>
-                <div className="text-[9px] text-slate-400">ประหยัดเครดิต + อัปสเกล 720p อัตโนมัติ</div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setOmniResolution("720p");
-                  saveSettings({ omniResolution: "720p" });
-                }}
-                className={`p-1.5 rounded text-left border transition-all ${
-                  omniResolution === "720p"
-                    ? "bg-emerald-900/40 border-emerald-500 text-emerald-200"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <div className="text-[11px] font-bold">720p ดั้งเดิม</div>
-                <div className="text-[9px] text-slate-400">ดาวน์โหลดตรง 720p ไม่ต้องอัปสเกล</div>
-              </button>
+              ))}
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle size={12} className="text-emerald-400 shrink-0" />
-              <span>ความละเอียดโมเดล {flowModel}:</span>
-            </div>
-            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-              720p ขนาดดั้งเดิม (ไม่ต้องอัปสเกล)
-            </span>
-          </div>
-        )}
-      </section>
 
-      {/* 100% Product & Logo Appearance Locking */}
-      <section className="glass-card p-2.5 bg-gradient-to-r from-blue-950/40 to-indigo-950/30 border-blue-700/50 flex flex-col gap-1.5 rounded-xl">
-        <label className="flex items-center justify-between cursor-pointer">
-          <div className="flex items-center gap-1.5">
-            <Lock size={14} className="text-blue-400 shrink-0" />
+          {/* Aspect Ratio & Model Row */}
+          <div className="grid grid-cols-2 gap-2.5 pt-1">
+            {/* Aspect Ratio */}
             <div>
-              <div className="text-xs font-bold text-blue-200">
-                ล็อกภาพสินค้า, ชื่อ, โลโก้ 100% (Product Reference Element)
-              </div>
-              <div className="text-[10px] text-slate-300">
-                นำภาพปกจริงจาก Showcase เข้าระบบ AI เป็น Reference ล็อกทรงกระปุก/ขวด โลโก้ และฉลาก 100%
+              <label className="text-[11px] text-slate-400 block mb-1">อัตราส่วน:</label>
+              <div className="flex gap-1.5">
+                {["9:16", "16:9", "1:1"].map((ratio) => (
+                  <button
+                    key={ratio}
+                    onClick={() => {
+                      setAspectRatio(ratio);
+                      saveSettings({ aspectRatio: ratio });
+                    }}
+                    className={`flex-1 py-1 text-xs rounded-lg border font-mono font-bold transition-all ${
+                      aspectRatio === ratio
+                        ? "bg-cyan-500/25 border-cyan-400 text-white"
+                        : "bg-black/20 border-white/5 text-slate-400"
+                    }`}
+                  >
+                    {ratio}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Model & Upscale Notice */}
+            <div>
+              <label className="text-[11px] text-slate-400 block mb-1">โมเดลสร้าง:</label>
+              <select
+                value={flowModel}
+                onChange={(e) => {
+                  setFlowModel(e.target.value);
+                  saveSettings({ flowModel: e.target.value });
+                }}
+                className="w-full px-2 py-1 text-xs rounded-lg bg-black/40 border border-white/10 text-slate-200 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="Omni 1.1 Flash">Omni 1.1 (360p &rarr; Upscale 720p)</option>
+                <option value="Veo 3.1 - Fast">Veo 3.1 Fast (720p มาตรฐาน)</option>
+              </select>
+            </div>
           </div>
-          <input
-            type="checkbox"
-            checked={lockProductReference}
-            onChange={(e) => {
-              setLockProductReference(e.target.checked);
-              saveSettings({ lockProductReference: e.target.checked });
-            }}
-            className="accent-blue-500 w-4 h-4 ml-2 shrink-0"
-          />
-        </label>
-      </section>
 
+          {/* Explanation Banner */}
+          <div className="text-[11px] bg-black/40 p-2.5 rounded-xl border border-white/5 text-slate-300 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>ลำดับการทำงานอัตโนมัติ (Flow Pipeline)</span>
+            </div>
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              1. โหมดภาพ 9:16 x1 Omni 360p &rarr; 2. ส่งภาพเข้า Frame to Video ({videoDuration}) &rarr; 3. โหลดแบบ Upscale 720p &rarr; 4. ส่งไฟล์เข้า TikTok Studio
+            </p>
+          </div>
+        </div>
 
-      {/* Marketing Style Presets (6 Modes) */}
-      <section className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-          <span>สไตล์การนำเสนอ (Marketing Mode)</span>
-          <span className="text-[10px] text-amber-400 font-mono">6 โหมดพรีเซ็ต</span>
-        </label>
-
-        <div className="grid grid-cols-2 gap-2">
-          {MARKETING_MODES.map((mode) => {
-            const isSelected = selectedModeId === mode.id;
-            return (
+        {/* Marketing Mode Selector */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#141b2d] to-[#0f1422] border border-cyan-500/20 shadow-md">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-cyan-400" />
+              <span>สไตล์ฉากโฆษณา (Marketing Mode)</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {MARKETING_MODES.slice(0, 4).map((mode) => (
               <button
                 key={mode.id}
                 onClick={() => setSelectedModeId(mode.id)}
-                className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? "bg-slate-800 border-amber-400 shadow-md shadow-amber-500/10"
-                    : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
+                className={`p-2 rounded-xl text-left border transition-all ${
+                  selectedModeId === mode.id
+                    ? "bg-cyan-500/15 border-cyan-400 text-white ring-1 ring-cyan-400/40"
+                    : "bg-black/20 border-white/5 text-slate-400 hover:text-slate-200"
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-1">
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                    style={{ backgroundColor: `${mode.color}20`, color: mode.color }}
-                  >
-                    {mode.badge}
-                  </span>
-                  {isSelected && <Check size={13} className="text-amber-400" />}
-                </div>
-                <div className="text-xs font-bold text-white mb-0.5">{mode.title}</div>
-                <p className="text-[10px] text-slate-400 line-clamp-2 leading-tight">
-                  {mode.tagline}
-                </p>
+                <div className="text-xs font-bold text-slate-100 truncate">{mode.title}</div>
+                <div className="text-[10px] text-slate-400 truncate">{mode.badge}</div>
               </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Step 1: Select Product from TikTok Showcase */}
-      <section className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-            <ShoppingBag size={14} className="text-pink-400" />
-            <span>1. เลือกสินค้าเพื่อใส่คิว ({products.length} รายการ)</span>
-          </label>
-          <button
-            onClick={handleLoadProducts}
-            disabled={loadingProducts}
-            className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 disabled:opacity-50"
-          >
-            <RefreshCw size={11} className={loadingProducts ? "animate-spin" : ""} />
-            {loadingProducts ? "กำลังโหลด..." : "โหลดใหม่"}
-          </button>
-        </div>
-
-        {productError && (
-          <div className="p-2 text-xs text-red-300 bg-red-950/40 border border-red-800 rounded-lg flex items-start gap-1.5">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            <span>{productError}</span>
+            ))}
           </div>
-        )}
-
-        <div className="glass-card p-2 max-h-40 overflow-y-auto flex flex-col gap-1.5">
-          {products.length === 0 && !loadingProducts ? (
-            <div className="text-center py-4 text-xs text-slate-400">
-              ไม่พบสินค้า หรือยังไม่ได้ล็อกอินที่ <code className="text-blue-400">shop.tiktok.com</code>
-            </div>
-          ) : (
-            products.map((p) => {
-              const isSelected = selectedProductId === p.id;
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => setSelectedProductId(p.id)}
-                  className={`flex items-center gap-2.5 p-1.5 rounded-lg border cursor-pointer transition-all ${
-                    isSelected
-                      ? "bg-blue-950/40 border-blue-500 shadow-sm shadow-blue-500/20"
-                      : "bg-slate-900/30 border-slate-800/80 hover:bg-slate-850"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="product_select"
-                    checked={isSelected}
-                    onChange={() => setSelectedProductId(p.id)}
-                    className="accent-blue-500"
-                  />
-                  {p.cover ? (
-                    <img src={p.cover} alt={p.title} className="w-8 h-8 rounded object-cover shrink-0 bg-slate-800" />
-                  ) : (
-                    <div className="w-8 h-8 rounded bg-slate-800 shrink-0 flex items-center justify-center text-xs">
-                      📦
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-medium text-slate-200 truncate">{p.title}</div>
-                    <div className="text-[10px] text-pink-400 font-bold">{p.price}</div>
-                  </div>
-                </div>
-              );
-            })
-          )}
         </div>
 
-        {/* Quantity selector & Add to Queue Button */}
-        <div className="glass-card p-2.5 flex items-center justify-between gap-3 bg-slate-900/70 border-slate-700/60 mt-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-200">สร้างสินค้านี้:</span>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 5].map((cnt) => (
-                <button
-                  key={cnt}
-                  onClick={() => setItemClipsCount(cnt)}
-                  className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
-                    Number(itemClipsCount) === cnt
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {cnt}
-                </button>
-              ))}
-              <span className="text-xs text-slate-400 ml-1">คลิป</span>
-            </div>
+        {/* TikTok Studio Automation Controls (Bento Row 3) */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#141b2d] to-[#0f1422] border border-cyan-500/20 shadow-md space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-cyan-400" />
+              <span>การตั้งค่าโพสต์ TikTok Studio</span>
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+              Auto Post On
+            </span>
           </div>
 
-          <button
-            onClick={handleAddToQueue}
-            disabled={!selectedProductId}
-            className="btn-primary text-xs py-1.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/25"
-          >
-            <PlusCircle size={14} /> เพิ่มลงคิวงาน
-          </button>
-        </div>
-      </section>
+          <div className="space-y-2 text-xs">
+            {/* Auto Pin Product (Yellow Basket) */}
+            <label className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5 cursor-pointer">
+              <span className="text-slate-300">ปักตะกร้าสินค้าสีเหลืองอัตโนมัติ (Yellow Basket)</span>
+              <input
+                type="checkbox"
+                checked={pinProduct}
+                onChange={(e) => {
+                  setPinProduct(e.target.checked);
+                  saveSettings({ pinProduct: e.target.checked });
+                }}
+                className="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700"
+              />
+            </label>
 
-      {/* Step 2: Queue Task List (คิวงานรอผลิต) */}
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-            <ListOrdered size={14} className="text-amber-400" />
-            <span>2. คิวงานรอผลิต ({queueItems.length} รายการ, รวม {totalClipsInQueue} คลิป)</span>
-          </label>
-          {queueItems.length > 0 && (
-            <button
-              onClick={handleClearQueue}
-              className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5"
-            >
-              <Trash2 size={11} /> ล้างคิว
-            </button>
-          )}
-        </div>
-
-        {queueItems.length === 0 ? (
-          <div className="glass-card p-3 text-center text-xs text-slate-400 border-dashed border-slate-700">
-            ยังไม่มีงานในคิว — เลือกสินค้าด้านบนแล้วกด <span className="text-blue-400 font-semibold">"เพิ่มลงคิวงาน"</span>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
-            {queueItems.map((item, idx) => {
-              const isCurrent = queueState.running && queueState.currentItemId === item.id;
-              return (
-                <div
-                  key={item.id}
-                  className={`glass-card p-2 flex items-center justify-between gap-2.5 transition-all ${
-                    isCurrent
-                      ? "border-blue-400 bg-blue-950/30 shadow-md shadow-blue-500/20"
-                      : item.status === "completed"
-                      ? "border-emerald-800/80 bg-emerald-950/20 opacity-80"
-                      : "border-slate-800 bg-slate-900/60"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] font-mono text-slate-400 w-4 shrink-0 font-bold">
-                      #{idx + 1}
-                    </span>
-                    {item.product?.cover && (
-                      <img
-                        src={item.product.cover}
-                        alt=""
-                        className="w-8 h-8 rounded object-cover shrink-0 bg-slate-800 border border-slate-700"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-slate-200 truncate">
-                        {item.product?.title}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-amber-300 font-medium">
-                          {item.mode?.title}
-                        </span>
-                        <span className="text-[10px] text-pink-400 font-bold">
-                          {item.clipsCount} คลิป
-                        </span>
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-blue-900/60 text-blue-300 border border-blue-700/40 font-mono">
-                          {item.videoDuration || "8 วินาที"}
-                        </span>
-                        {item.aspectRatio && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900/60 text-purple-300 border border-purple-700/40 font-mono">
-                            {item.aspectRatio}
-                          </span>
-                        )}
-                        {item.flowModel && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 font-mono">
-                            {item.flowModel.includes("Omni")
-                              ? `Omni (${item.resolution || "360p"}${item.shouldUpscale ? " ➔ 720p" : ""})`
-                              : item.flowModel}
-                          </span>
-                        )}
-                        {item.lockProductReference !== false && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 font-medium flex items-center gap-0.5">
-                            <Lock size={8} /> ล็อกภาพ 100%
-                          </span>
-                        )}
-                        {item.status === "completed" && (
-                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
-                            <CheckCircle size={10} /> เสร็จแล้ว
-                          </span>
-                        )}
-                        {isCurrent && (
-                          <span className="text-[10px] text-blue-400 font-semibold flex items-center gap-0.5">
-                            <RefreshCw size={10} className="animate-spin" /> กำลังทำ ({queueState.currentClip}/{item.clipsCount})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleRemoveQueueItem(item.id)}
-                    disabled={isCurrent}
-                    className="p-1 text-slate-500 hover:text-red-400 transition-colors disabled:opacity-20 shrink-0"
-                    title="ลบออกจากคิว"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Schedule & Post Options */}
-      <section className="glass-card p-3 flex flex-col gap-2.5">
-        <div className="flex flex-col gap-2">
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-xs text-slate-300">ดาวน์โหลดคลิปลงเครื่องอัตโนมัติ</span>
-            <input type="checkbox" checked={true} readOnly className="accent-blue-500" />
-          </label>
-
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-xs text-slate-300 font-medium">อัปโหลดขึ้น TikTok Studio อัตโนมัติ</span>
-            <input
-              type="checkbox"
-              checked={autoPost}
-              onChange={(e) => setAutoPost(e.target.checked)}
-              className="accent-pink-500"
-            />
-          </label>
-
-          {autoPost && (
-            <div className="flex flex-col gap-2 pl-3 border-l-2 border-pink-500/80 pt-1">
-              {/* Product link toggle */}
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <div className="text-xs text-pink-300 font-semibold">ปักตะกร้าสินค้า (Product Showcase Link)</div>
-                  <div className="text-[10px] text-slate-400">ค้นหาและผูกตะกร้าสีเหลืองอัตโนมัติ</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={pinProduct}
-                  onChange={(e) => setPinProduct(e.target.checked)}
-                  className="accent-pink-500"
-                />
-              </label>
-
-              {/* AI Content Disclosure toggle */}
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <div className="text-xs text-emerald-300 font-semibold">เปิดเผยเนื้อหา AI (AI Content Disclosure)</div>
-                  <div className="text-[10px] text-slate-400">เปิดสวิตช์ "สร้างโดย AI" บน TikTok Studio ป้องกันผิดกฎ</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={enableAiDisclosure}
-                  onChange={(e) => setEnableAiDisclosure(e.target.checked)}
-                  className="accent-emerald-400"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* Schedule & Time Interval Settings */}
-        {autoPost && (
-          <div className="border-t border-slate-800/80 pt-2 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                <Calendar size={13} /> กำหนดเวลา & ระยะห่างแต่ละคลิป
-              </span>
-              <label className="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isScheduled}
-                  onChange={(e) => setIsScheduled(e.target.checked)}
-                  className="accent-amber-400"
-                />
-                เปิดตั้งเวลา
-              </label>
-            </div>
-
-            {isScheduled && (
-              <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex flex-col gap-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] text-slate-400">วันที่เริ่มคลิปแรก:</span>
-                    <input
-                      type="date"
-                      value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      className="text-xs bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] text-slate-400">เวลาเริ่มคลิปแรก:</span>
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      className="text-xs bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-slate-300 flex items-center gap-1">
-                    <Hourglass size={12} className="text-amber-400" />
-                    เว้นห่างกันแต่ละคลิป:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 6, 12, 24].map((hrs) => (
-                      <button
-                        key={hrs}
-                        onClick={() => setIntervalHours(hrs)}
-                        className={`px-1.5 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                          Number(intervalHours) === hrs
-                            ? "bg-amber-500 text-slate-950 font-bold"
-                            : "bg-slate-800 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {hrs} ชม.
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            {/* AI Disclosure Toggle Switch */}
+            <label className="flex items-center justify-between p-2 rounded-xl bg-cyan-950/30 border border-cyan-500/30 cursor-pointer">
+              <div className="pr-2">
+                <span className="text-cyan-200 font-semibold block">เปิดสวิตช์ 'เนื้อหาที่สร้างโดย AI'</span>
+                <span className="text-[10px] text-slate-400 block">เปิดป้าย AIGC disclosure บน TikTok Studio อัตโนมัติ</span>
               </div>
-            )}
-          </div>
-        )}
-      </section>
+              <input
+                type="checkbox"
+                checked={enableAiDisclosure}
+                onChange={(e) => {
+                  setEnableAiDisclosure(e.target.checked);
+                  saveSettings({ enableAiDisclosure: e.target.checked });
+                }}
+                className="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700"
+              />
+            </label>
 
-      {/* Start / Stop Execution Section */}
-      <section className="flex flex-col gap-2">
-        {queueState.running ? (
-          <div className="glass-card p-3 border-blue-500/50 bg-blue-950/20 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-                <RefreshCw size={13} className="animate-spin text-blue-400" />
-                กำลังรันคิวงานอัตโนมัติ...
+            {/* Post Timing Mode (Schedule vs Instant) */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setPostMode("schedule");
+                  saveSettings({ postMode: "schedule" });
+                }}
+                className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
+                  postMode === "schedule"
+                    ? "bg-cyan-500/20 border-cyan-400 text-white"
+                    : "bg-black/20 border-white/5 text-slate-400"
+                }`}
+              >
+                ตั้งเวลาล่วงหน้า ({scheduleOffsetMinutes} นาที)
+              </button>
+              <button
+                onClick={() => {
+                  setPostMode("instant");
+                  saveSettings({ postMode: "instant" });
+                }}
+                className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
+                  postMode === "instant"
+                    ? "bg-cyan-500/20 border-cyan-400 text-white"
+                    : "bg-black/20 border-white/5 text-slate-400"
+                }`}
+              >
+                โพสต์ตอนนี้ (Instant)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Queue Progress Status */}
+        {queueState.running && (
+          <div className="p-3 rounded-2xl bg-cyan-950/70 border border-cyan-500/50 shadow-lg shadow-cyan-950 animate-pulse">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-cyan-200 flex items-center gap-1.5">
+                <Hourglass className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                <span>กำลังทำงานอัตโนมัติ...</span>
               </span>
               <button
                 onClick={handleStopQueue}
-                className="text-xs bg-red-600/30 text-red-400 border border-red-500/40 px-2 py-0.5 rounded hover:bg-red-600 hover:text-white transition-all flex items-center gap-1"
+                className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30"
               >
-                <Square size={11} /> หยุดการทำงาน
+                หยุดงาน
               </button>
             </div>
-            <p className="text-[11px] text-slate-200 font-medium">
-              {queueState.message}
+            <p className="text-[11px] text-slate-300 leading-snug">
+              {queueState.message || "กำลังประมวลผล..."}
             </p>
           </div>
-        ) : (
-          <button
-            onClick={handleStartQueue}
-            className="btn-primary w-full py-3 text-sm shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] transition-transform active:scale-[0.99]"
-          >
-            <Play size={17} fill="currentColor" />
-            {remainingClipsInQueue > 0
-              ? `เริ่มรันคิวงานทั้งหมด (${remainingClipsInQueue} คลิปที่รอทำ)`
-              : "🚀 เริ่มสร้างวิดีโอทันที (1 คลิกเริ่มทำงาน)"}
-          </button>
         )}
-      </section>
+      </main>
 
-      {/* History / Created Gallery */}
-      {history.length > 0 && (
-        <section className="flex flex-col gap-2 pt-2 border-t border-slate-800">
-          <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-            <span>คลิปและสคริปต์ที่สร้างสำเร็จ ({history.length})</span>
-          </label>
-
-          <div className="flex flex-col gap-2.5">
-            {history.slice(0, 5).map((item) => (
-              <div key={item.id} className="glass-card p-2.5 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] bg-slate-800 text-amber-400 px-1.5 py-0.5 rounded font-mono font-bold">
-                        {item.mode}
-                      </span>
-                      {item.scheduleSlot && (
-                        <span className="text-[10px] bg-blue-950/60 text-blue-300 border border-blue-800 px-1.5 py-0.5 rounded font-mono">
-                          📅 {item.scheduleSlot.timeFormatted}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs font-semibold text-white truncate mt-1">
-                      {item.product?.title}
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-slate-400 shrink-0">
-                    {new Date(item.completedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-
-                {/* 100% Thai Dialogue script box */}
-                {item.dialogue && (
-                  <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-blue-400 flex items-center gap-1">
-                        <Mic size={10} /> บทพูดพากย์ภาษาไทย 100% (ไม่มีคำอังกฤษ/คำต้องห้าม):
-                      </span>
-                      <button
-                        onClick={() => handleCopyDialogue(item.id, item.dialogue)}
-                        className="text-[9px] text-slate-400 hover:text-white flex items-center gap-0.5"
-                      >
-                        <Copy size={9} />
-                        {copiedDialogueId === item.id ? "คัดลอกแล้ว!" : "คัดลอกบทพูด"}
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-200 leading-relaxed font-sans">
-                      "{item.dialogue}"
-                    </p>
-                  </div>
-                )}
-
-                {/* Media Preview & Caption */}
-                <div className="flex items-center gap-2">
-                  {item.mediaResult?.imageUrl && (
-                    <img
-                      src={item.mediaResult.imageUrl}
-                      alt="Base Image"
-                      className="w-16 h-24 object-cover rounded-lg border border-slate-700 bg-slate-900 shrink-0"
-                    />
-                  )}
-                  {item.mediaResult?.videoUrl && (
-                    <video
-                      src={item.mediaResult.videoUrl}
-                      controls
-                      className="w-16 h-24 object-cover rounded-lg border border-slate-700 bg-slate-900 shrink-0"
-                    />
-                  )}
-                  <div className="flex-1 text-[10px] text-slate-300 line-clamp-4 bg-slate-900/60 p-2 rounded-lg border border-slate-800">
-                    {item.caption || item.mediaResult?.caption || "ไม่มีแคปชั่น"}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
-                  <div className="text-[9px] text-slate-400">
-                    {item.basketName ? `ตะกร้า: "${item.basketName}"` : ""}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {item.caption && (
-                      <button
-                        onClick={() => handleCopyCaption(item.id, item.caption)}
-                        className="text-[10px] text-slate-300 hover:text-white flex items-center gap-1 bg-slate-800 px-2 py-1 rounded"
-                      >
-                        <Copy size={11} />
-                        {copiedCaptionId === item.id ? "คัดลอกแล้ว!" : "คัดลอกแคปชั่น"}
-                      </button>
-                    )}
-                    {item.mediaResult?.videoUrl && (
-                      <a
-                        href={item.mediaResult.videoUrl}
-                        download={`video_${item.id}.mp4`}
-                        className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-950/40 border border-blue-800/60 px-2 py-1 rounded"
-                      >
-                        <Download size={11} /> ดาวน์โหลดซ้ำ
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Floating Bottom Action Bar (1-Click Start) */}
+      <footer className="p-3 bg-[#0d121e]/95 backdrop-blur-md border-t border-cyan-500/20 shrink-0">
+        <button
+          onClick={handleStartAutomation}
+          disabled={queueState.running}
+          className="w-full py-3.5 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed ring-1 ring-cyan-300/40"
+        >
+          <Play className="w-4 h-4 fill-white" />
+          <span>
+            {queueState.running
+              ? "ระบบกำลังทำงานอัตโนมัติ..."
+              : "เริ่มสร้างคลิปและโพสต์ TikTok ทันที (1-Click Start)"}
+          </span>
+        </button>
+      </footer>
     </div>
   );
 }
